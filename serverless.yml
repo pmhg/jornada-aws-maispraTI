@@ -1,0 +1,234 @@
+service: mentoria-api-aws
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-pseudo-parameters
+  - serverless-plugin-stage-variables
+  - serverless-offline-sqs
+  - serverless-offline
+  - serverless-aws-documentation
+  - serverless-add-api-key
+  - serverless-plugin-common-excludes
+  - serverless-plugin-include-dependencies
+  - serverless-prune-versions
+
+custom:
+  stageVariables:
+    STAGE: ${env:ENV}
+  prune:
+    automatic: true
+  region: ${self:provider.region}
+  serverless-offline:
+    directory: /tmp
+    noAuth: true
+  serverless-offline-ssm:
+    stages:
+      - dev
+  s3:
+    host: 0.0.0.0
+    port: 9000
+    directory: /tmp
+    bucketName: 'offline'
+    region: sa-east-1
+    accessKeyId: S3RVER
+    secretAccessKey: S3RVER
+ 
+  
+provider:
+  name: aws
+  runtime: nodejs14.x
+  stage: ${env:ENV}
+  region: 'us-east-1'
+  context: ${env:CONTEXT}
+  profile: mentoria-${env:ENV}
+  deploymentBucket:
+    name: ${self:service}-${self:provider.stage}-${self:provider.context}
+  environment:
+    ENV: ${env:ENV}
+    DB_URL: ${ssm:${self:service}-${self:provider.context}-bd.mentoria.url.${env:ENV}~true}
+    IMAGE_UPLOAD_BUCKET_OFFLINE: "local-bucket"
+    JORNADA_MONITOR_TABLE: JORNADA_MONITOR-${self:provider.context}-${self:provider.stage}
+    URL_LOCAL_S3: "localhost:9000"
+    MONITOR_QUEUE: ${ssm:${self:provider.context}-monitor-queue.${env:ENV}~true}
+    ACCESS_KEY_ID: ${ssm:ACCESS_KEY_ID~true}
+    SECRET_ACCESS_KEY: ${ssm:SECRET_ACCESS_KEY~true}
+    REGION: us-east-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - "s3:*"
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - "ssm:*"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:GetItem"
+        - "dynamodb:PutItem"
+        - "dynamodb:UpdateItem"
+        - "dynamodb:DeleteItem"
+        - "dynamodb:Query"
+        - "dynamodb:Scan"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "sqs:SendMessage"
+      Resource:
+        - arn:aws:sqs:us-east-1:925832666705:MONITOR_QUEUE-${env:ENV}.fifo
+functions:
+  storage:
+    handler: build/api/v1/crypto/lambda.execute
+    name: ${self:service}-v1-crypto-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/crypto/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/crypto
+          method: get
+          cors: true
+  crypto:
+    handler: build/api/v1/crypto/list/lambda.execute
+    name: ${self:service}-v1-crypto-list-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/crypto/list/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/crypto/list
+          method: get
+          cors: true    
+
+  Createcrypto:
+    handler: build/api/v1/crypto/create/lambda.execute
+    name: ${self:service}-v1-crypto-create-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/crypto/create/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/crypto/create
+          method: post
+          cors: true    
+
+  Updatecrypto:
+    handler: build/api/v1/crypto/update/lambda.execute
+    name: ${self:service}-v1-crypto-update-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/crypto/update/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/crypto/{idCrypto}
+          method: post
+          cors: true
+          ###################  PATH PARAM #####################
+          request:
+            parameters:
+              paths:
+                idCrypto: true
+
+  cep:
+    handler: build/api/v1/cep/lambda.execute
+    name: ${self:service}-v1-cep-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/cep/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/cep/{cep}
+          method: get
+          cors: true
+          ###################  PATH PARAM #####################
+          request:
+            parameters:
+              paths:
+                cep: true
+  monitor-processamento:
+    handler: build/api/v1/listener/lambda.execute
+    name: ${self:service}-v1-monitor-processamento-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/api/v1/listener/**
+    events:
+      - sqs:
+          arn: 
+            Fn::GetAtt: 
+              - monitorSQS
+              - Arn
+  sorteio:
+    handler: build/api/v1/sorteio/lambda.execute
+    name: ${self:service}-v1-sorteio-${self:provider.stage}-${self:provider.context}
+    timeout: 30
+    package:
+      include:
+        - build/v1/sorteio/**
+    events:
+      - http:
+          path: ${self:provider.context}/api/v1/sorteio
+          method: get
+          cors: true
+         
+resources:
+  Description: "API de crypto"
+  Resources:
+    monitorSQS:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: MONITOR_QUEUE-${env:ENV}.fifo
+        FifoQueue: true
+    
+    Monitor:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: JORNADA_MONITOR-${self:provider.context}-${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: contextId
+            AttributeType: S
+          - AttributeName: date
+            AttributeType: S  
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 3
+          WriteCapacityUnits: 3
+        GlobalSecondaryIndexes: 
+          - IndexName: "contextId-date"
+            KeySchema: 
+              - AttributeName: "contextId"
+                KeyType: "HASH"
+              - AttributeName: "date"
+                KeyType: "RANGE"
+            Projection: 
+              ProjectionType: "ALL"
+            ProvisionedThroughput: 
+              ReadCapacityUnits: "5"
+              WriteCapacityUnits: "5"
+
+##################################  PACKAGE CONFIG  #######################################
+package:
+  patterns:
+    - '!node_modules/**' # no need to add this, this plugin does it for you
+  individually: false
+  excludeDevDependencies: false
+  exclude:
+    - ./**
+    - '!node_modules/**'
+  include:
+    - build/**
+    - package.json

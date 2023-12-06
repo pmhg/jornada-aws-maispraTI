@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "ImageUpload",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "string",
+      "title": "Imagem em base64 ou uma imagem via url."
+    },
+    "path": {
+      "type": "string",
+      "title": "Caminho da pasta que será salvo o arquivo"
+    }
+  }
+}

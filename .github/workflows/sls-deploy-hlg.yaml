@@ -1,0 +1,54 @@
+name: Deploy develop branch
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  NODE_ENV: hlg
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+        always-auth: true
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@leeurope'
+    - run: npm ci
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.CI_AUTH_TOKEN }}
+    - run: npm run build
+    - name: remove profile
+      run: "sed -i 's/profile: leeurope-${env:ENV}//g' ./serverless.yml"
+    - name: serverless deploy
+      uses: SuprGames/serverless-github-action@v1.77
+      with:
+        command: deploy
+        args: -v
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_HLG }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_HLG }}  
+    - uses: Fooji/create-aws-profile-action@v1
+      with:
+        profile: leeurope-hlg
+        region: sa-east-1
+        key: ${{ secrets.AWS_ACCESS_KEY_ID_HLG }}
+        secret: ${{ secrets.AWS_SECRET_ACCESS_KEY_HLG }}
+   
+  swagger:
+    name: swagger
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: deploy docs
+      run: ./deploy-swagger.sh

@@ -1,0 +1,19 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Result",
+    "type": "object",
+    "properties": {
+        "code": {
+            "type": "string",
+            "title": "Código http para o resultado da requisição."
+        },
+        "info": {
+            "type": "string",
+            "title": "Descrição do código http para o resultado da requisição."
+        },
+        "message": {
+            "type": "string",
+            "title": "Mensagem detalhando resultado da requisição."
+        }
+    }
+}

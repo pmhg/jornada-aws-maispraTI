@@ -1,0 +1,19 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "EntityError",
+    "type": "object",
+    "properties": {
+        "code": {
+            "type": "string",
+            "title": "Código do erro: [404, 409, 412, 422]"
+        },
+        "message": {
+            "type": "string",
+            "title": "Mensagem explicativa sobre o erro."
+        },
+        "field": {
+            "type": "string",
+            "title": "Campo que ocasionou o erro."
+        }
+    }
+}
